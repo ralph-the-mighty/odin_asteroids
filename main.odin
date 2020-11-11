@@ -19,9 +19,8 @@ BULLET_VEL     :: 500;           // pixels  / sec
 
 
 
-SCREEN_WIDTH  :: 1000;
-SCREEN_HEIGHT :: 1000;
-
+SCREEN_WIDTH  :: 620;
+SCREEN_HEIGHT :: 480;
 
 
 KeyState :: struct {
@@ -71,7 +70,25 @@ Bullet :: struct {
     lifetime: f32
 };
 
+
+
+GameMode :: enum {
+  MENU,
+  GAME
+}
+
+
+
+
+
+
+
+
 GameState :: struct {
+  mode: GameMode,
+
+  menu_cursor: int,
+
   player: Player,
   score: uint,
   asteroids: [dynamic]Asteroid,
@@ -134,13 +151,12 @@ process_events :: proc() {
 }
 
 
-init_game :: proc(game: ^GameState) {
-    using game;
-    player.pos = {320, 240};
-    player.rotation.y = 1; 
+new_game :: proc(game: ^GameState) {
+    game.mode = .GAME;
+    game.player.pos = {320, 240};
+    game.player.rotation.y = 1;
     gen_asteroids(game, 10);
-} 
-
+}
 
 
 gen_asteroid :: proc(game: ^GameState, pos: linalg.Vector2, size: f32, gen: int) {
@@ -222,137 +238,158 @@ wrap_position :: proc(pos: ^linalg.Vector2) {
 update :: proc(game: ^GameState, dt: f32) {
   frame += 1;
 
-  if came_down(.Escape) {
-    running = false;
-  }
-    
-  if came_down(.P) {
-    paused = !paused;
-  }
-  
-  if came_down(.D) {
-    debug_mode = !debug_mode;
-  }
-    
-  if came_down(.G) {
-    gen_asteroids(&global_game_state, 10);
-  }
-
-  if came_down(.K) {
-    if len(game.asteroids) > 0 do pop(&game.asteroids);
-  }
-
-  if is_down(.Space) {
-    b: Bullet;
-    b.lifetime = 2;
-    b.pos = game.player.pos + game.player.rotation * 15;
-    b.vel = game.player.rotation * BULLET_VEL;
-    append(&game.bullets, b);
-  }
-    
-  if paused do return;
-
-
-
-  //update player
-  if is_down(.Left) {
-    new_rotation: linalg.Vector2;
-    new_rotation.x = game.player.rotation.x * math.cos(-TURN_RATE * dt) - game.player.rotation.y * math.sin(-TURN_RATE * dt);
-    new_rotation.y = game.player.rotation.x * math.sin(-TURN_RATE * dt) + game.player.rotation.y * math.cos(-TURN_RATE * dt);
+  switch game.mode {
+    case .MENU:
+      if is_down(.Return) {
+        game.mode = .GAME;
+        new_game(game);
+      }
+      if came_down(.Up) {
+        game.menu_cursor = (game.menu_cursor - 1) % 3;
+      }
+      if came_down(.Down) {
+        game.menu_cursor = (game.menu_cursor + 1) % 3;
+      }
+    case .GAME:
+      if came_down(.Escape) {
+        running = false;
+      }
+        
+      if came_down(.P) {
+        paused = !paused;
+      }
       
-    game.player.rotation = new_rotation;
-  }
-  
-  if is_down(.Right) {
-    new_rotation: linalg.Vector2;
-    new_rotation.x = game.player.rotation.x * math.cos(TURN_RATE * dt) - game.player.rotation.y * math.sin(TURN_RATE * dt);
-    new_rotation.y = game.player.rotation.x * math.sin(TURN_RATE * dt) + game.player.rotation.y * math.cos(TURN_RATE * dt);
+      if came_down(.D) {
+        debug_mode = !debug_mode;
+      }
+        
+      if came_down(.G) {
+        gen_asteroids(&global_game_state, 10);
+      }
+
+      if came_down(.K) {
+        if len(game.asteroids) > 0 do pop(&game.asteroids);
+      }
+
+      if came_down(.Space) {
+        b: Bullet;
+        b.lifetime = 2;
+        b.pos = game.player.pos + game.player.rotation * 15;
+        b.vel = game.player.rotation * BULLET_VEL;
+        append(&game.bullets, b);
+      }
+        
+      if paused do return;
+
+
+
+      //update player
+      if is_down(.Left) {
+        new_rotation: linalg.Vector2;
+        new_rotation.x = game.player.rotation.x * math.cos(-TURN_RATE * dt) - game.player.rotation.y * math.sin(-TURN_RATE * dt);
+        new_rotation.y = game.player.rotation.x * math.sin(-TURN_RATE * dt) + game.player.rotation.y * math.cos(-TURN_RATE * dt);
+          
+        game.player.rotation = new_rotation;
+      }
       
-    game.player.rotation = new_rotation;
-  }
-  
-  if is_down(.Up) {
-    game.player.vel = game.player.vel + game.player.rotation * THRUST_VEL * dt;
-    if linalg.length(game.player.vel) > PLAYER_MAX_VEL {
-      game.player.vel = linalg.normalize(game.player.vel) * PLAYER_MAX_VEL;
-    }
-  }
-
-  
-  game.player.pos += game.player.vel * dt;
-  wrap_position(&(game.player.pos));
-
-
-
-  //update asteroids
-  for a in &game.asteroids {
-    a.pos.x += a.vel.x * dt;
-    a.pos.y += a.vel.y * dt;
-    a.rot += a.rot_vel * dt;
-    if a.rot >= 2 * math.PI {
-        a.rot -= 2 * math.PI;
-    }
-    
-    wrap_position(&a.pos);
-  }
-
-  //update bullets
-  for b, i in &game.bullets {
-    b.lifetime -= dt;
+      if is_down(.Right) {
+        new_rotation: linalg.Vector2;
+        new_rotation.x = game.player.rotation.x * math.cos(TURN_RATE * dt) - game.player.rotation.y * math.sin(TURN_RATE * dt);
+        new_rotation.y = game.player.rotation.x * math.sin(TURN_RATE * dt) + game.player.rotation.y * math.cos(TURN_RATE * dt);
+          
+        game.player.rotation = new_rotation;
+      }
       
-    if b.lifetime <= 0 {
-      unordered_remove(&game.bullets, i);
-      continue;
-    }
-      
-    b.pos = b.pos + b.vel * dt;
-    wrap_position(&b.pos);
-  }
-
-
-    //collision detection
-  for a, a_index in &game.asteroids {
-    transformed_points: [5]linalg.Vector2;
-    for v, i in a.vertices {
-      transformed_points[i] = transform(a.rot, a.pos, v);
-    }
-    for b, b_index in &game.bullets {
-      if point_in_polygon(b.pos, transformed_points[:]) {
-        if(a.gen > 0) {
-          gen_asteroid(game, a.pos, a.size * 0.75, a.gen - 1);
-          gen_asteroid(game, a.pos, a.size * 0.75, a.gen - 1);
+      if is_down(.Up) {
+        game.player.vel = game.player.vel + game.player.rotation * THRUST_VEL * dt;
+        if linalg.length(game.player.vel) > PLAYER_MAX_VEL {
+          game.player.vel = linalg.normalize(game.player.vel) * PLAYER_MAX_VEL;
         }
-        unordered_remove(&game.bullets, b_index);
-        unordered_remove(&game.asteroids, a_index);
+      }
+
+      
+      game.player.pos += game.player.vel * dt;
+      wrap_position(&(game.player.pos));
+
+
+
+      //update asteroids
+      for a in &game.asteroids {
+        a.pos.x += a.vel.x * dt;
+        a.pos.y += a.vel.y * dt;
+        a.rot += a.rot_vel * dt;
+        if a.rot >= 2 * math.PI {
+            a.rot -= 2 * math.PI;
+        }
+        
+        wrap_position(&a.pos);
+      }
+
+      //update bullets
+      for b, i in &game.bullets {
+        b.lifetime -= dt;
+          
+        if b.lifetime <= 0 {
+          unordered_remove(&game.bullets, i);
+          continue;
+        }
+          
+        b.pos = b.pos + b.vel * dt;
+        wrap_position(&b.pos);
+      }
+
+
+        //collision detection
+        //TODO: fix bug where two bullets destroy the same asteroid at the same time
+      for a, a_index in &game.asteroids {
+        transformed_points: [5]linalg.Vector2;
+        for v, i in a.vertices {
+          transformed_points[i] = transform(a.rot, a.pos, v);
+        }
+        for b, b_index in &game.bullets {
+          if point_in_polygon(b.pos, transformed_points[:]) {
+            if(a.gen > 0) {
+              gen_asteroid(game, a.pos, a.size * 0.75, a.gen - 1);
+              gen_asteroid(game, a.pos, a.size * 0.75, a.gen - 1);
+            }
+            unordered_remove(&game.bullets, b_index);
+            unordered_remove(&game.asteroids, a_index);
+            game.score += 10;
+          }
+        }
       }
     }
-  }
 
 }
 
 
 arial: ^sdl_ttf.Font;
+minecraft: ^sdl_ttf.Font;
 
 
 main :: proc() {
   if !SDL_Init() {
+    fmt.println("Could not initialize SDL");
     os.exit(1);
   }
 
   gRenderer := sdl.create_renderer(gWindow, -1, sdl.Renderer_Flags(0));
 
 
-
-  res := sdl_ttf.init();
-
-  fmt.println(res);
-
-
-
-  init_game(&global_game_state);
-
+  //font initialization
+  if sdl_ttf.init() == -1 {
+    fmt.println("Could not initialize sdl_ttf");
+    os.exit(1);
+  }
 
   arial = sdl_ttf.open_font("arial.ttf", 32);
+  minecraft = sdl_ttf.open_font("minecraft.ttf", 16);
+
+  global_game_state.mode = .MENU;
+  //new_game(&global_game_state);
+
+
+
 	
 
   seconds_per_tick := 1.0 / f32(sdl.get_performance_frequency());
@@ -372,19 +409,8 @@ main :: proc() {
       accumulator -= dt;
     }
 
-    draw_start_ticks := sdl.get_performance_counter();
+    
     draw(&global_game_state, gScreenSurface);
-    draw_end_ticks := sdl.get_performance_counter();
-    draw_delta_ticks := draw_end_ticks - draw_start_ticks;
-    //fmt.printf("\r%i\n", draw_delta_ticks); 
-    draw_string(gScreenSurface, arial, fmt.tprintf("%f", frame_time), 100, 100);
-
-
-	  
-	  
-
-
-
 
     //sdl.render_present(gRenderer);
     sdl.update_window_surface(gWindow);

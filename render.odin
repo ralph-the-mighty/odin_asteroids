@@ -4,9 +4,9 @@ import "core:math/linalg"
 import "core:math"
 import sdl "shared:odin-sdl2"
 import sdl_ttf "shared:odin-sdl2/ttf"
-// import sdl_image "shared:odin-sdl2/image"
 import "core:mem"
 import "core:strings"
+import "core:fmt";
 
 
 
@@ -29,7 +29,7 @@ transform :: proc(angle: f32, origin, point: linalg.Vector2) -> linalg.Vector2 {
 
 
 
-draw_rect :: proc(surface: ^sdl.Surface, rx, ry, rw, rh: i32, r, g, b: u32) {
+fill_rect :: proc(surface: ^sdl.Surface, rx, ry, rw, rh: i32, r, g, b: u32) {
     
   row: ^u8 = cast(^u8)surface.pixels;
     for y in 0..<surface.h {
@@ -88,7 +88,7 @@ plot_point_blend :: proc(surface: ^sdl.Surface, px, py: i32, brightness: u8) {
 
 
 
-import "core:fmt";
+
 draw_line_wu_coords :: proc (surface: ^sdl.Surface, _x0, _y0, _x1, _y1: i32) {
     //TODO(Josh): swap function
 
@@ -280,13 +280,67 @@ fade :: proc(surface: ^sdl.Surface) {
 }
 
 
-draw :: proc(game: ^GameState, surface: ^sdl.Surface) { 
+
+draw :: proc(game: ^GameState, surface: ^sdl.Surface) {
+  sdl.fill_rect(surface, nil, sdl.map_rgb(surface.format, 0, 0, 0));
+  switch game.mode {
+    case .GAME: draw_game(game, surface);
+    case .MENU: draw_menu(game, surface);
+  }
+
+}
+
+
+draw_game :: proc(game: ^GameState, surface: ^sdl.Surface) {
   sdl.fill_rect(surface, nil, sdl.map_rgb(surface.format, 0, 0, 0));
   draw_asteroids(surface, game);
   draw_bullets(surface, game);
   draw_player(surface, &(game.player));
 
-  draw_string(surface, arial, "HERE IS YOUR SCORE", 500, 500);
+  draw_string(surface, minecraft, fmt.tprintf("%d", game.score), SCREEN_WIDTH - 50, 10);
+}
+
+
+
+draw_rect :: proc(surface: ^sdl.Surface, x, y, w, h: i32) {
+  draw_line_wu(surface, x, y, x + w, y);         //top
+  draw_line_wu(surface, x + w, y, x + w, y + h); //right
+  draw_line_wu(surface, x + w, y + h, x, y + h); //bottom
+  draw_line_wu(surface, x, y + h, x, y);         //left
+}
+
+
+draw_menu :: proc(game: ^GameState, surface: ^sdl.Surface) {
+  
+  button_height: i32 = 30;
+  button_width:  i32 = 200;
+  margin_height: i32 = 30;
+
+  button_count : i32= 3;
+
+  buttons := []string{"new game", "high scores", "exit"};
+
+  total_menu_height : i32 = button_count * button_height + 
+                      (button_count - 1) *margin_height;
+  center_x := i32(SCREEN_WIDTH) / 2;
+  center_y := i32(SCREEN_HEIGHT) / 2;
+
+
+  x := center_x - (button_width / 2);
+  y := center_y - (total_menu_height / 2);
+
+  for title, index in buttons {
+    //draw_string_center(surface, minecraft, "main menu!!", center_x, center_y);
+    //draw_marker(surface, center_x, center_y, 255, 0, 0);
+    draw_rect(surface, x, y, button_width, button_height);
+    if index == game.menu_cursor {
+      fill_rect(surface, x + 1, y + 1, button_width - 2, button_height - 2, 25, 25, 25);
+    }
+    draw_string_center(surface, minecraft, title, x + button_width / 2, y + button_height / 2);
+    y += button_height + margin_height;
+
+    // draw_rect(surface, center_x - 100, center_y + 30, 200, 30);
+  }  
 }
 
 
@@ -299,72 +353,23 @@ wrap_pos :: proc (pos: ^linalg.Vector2) {
 }
 
 
-
-
-/*
-draw_rect :: proc(surface: ^sdl.Surface, rx, ry, rw, rh: i32, r, g, b: u32) {
-    
-  row: ^u8 = cast(^u8)surface.pixels;
-    for y in 0..<surface.h {
-      pixel := cast(^u32)row;
-      for x in 0..<surface.w {
-        if x >= rx && x <= rx + rw && y >= ry && y <= ry + rh {
-          pixel^ = (b) | (g << 8) | (r << 16);
-        }
-       pixel = mem.ptr_offset(pixel, 1);
-      }
-      row = mem.ptr_offset(row, int(surface.pitch));
-    }
-}
-*/
-
-
-
-
 draw_string :: proc(surface: ^sdl.Surface, font: ^sdl_ttf.Font, s: string, x, y: i32) {
-  // char_width := 8;
-  // for c, i in s {
-  //   draw_char(surface, u8(c), u32(x) + u32(char_width) * u32(i), y);
-  // }
-
-  //TODO: clone_to_csring leaks. Use a temp allocator, or free the string
   cs := strings.clone_to_cstring(s);
   text_surface := sdl_ttf.render_utf8_solid(font, cs, sdl.Color{255, 255, 255, 255});
   pos := sdl.Rect{x=x, y=y};
   sdl.upper_blit(text_surface, nil, surface, &pos);
   sdl.free_surface(text_surface);
-  mem.free(&cs);
+  mem.free(rawptr(cs));
 }
 
-
-draw_char :: proc(surface: ^sdl.Surface, char: u8, x, y: u32) {
-
-
-
-  bit_size : i32 = 1;
-  
-  // for row in 0..<8 {
-  //   for col in 0..<8 {
-  //     if (bitmaps[char - 65][row] >> uint(8 - col) & 0x1) == 1 {
-  //       draw_rect(surface, i32(x) + i32(col) * bit_size,
-  //                          i32(y) + i32(row) * bit_size, 
-  //                          bit_size, bit_size - 1, 
-  //                          0xff, 0xff, 0xff);
-  //     }
-  //   }
-  // }
-
-  for row in 0..<8 {
-    for col in 0..<8 {
-      bitmap_index: u8;
-      if char == ' ' {
-        bitmap_index = 0;
-      } else {
-        bitmap_index = char - 64;
-      }
-      if (bitmaps[bitmap_index][row] >> uint(7 - col) & 0x1) == 1 {
-        plot_point(surface, i32(x) + i32(col), i32(y) + i32(row), 0xff, 0xff, 0xff);
-      }
-    }
-  }
+draw_string_center :: proc(surface: ^sdl.Surface, font: ^sdl_ttf.Font, s: string, x, y: i32) {
+  cs := strings.clone_to_cstring(s);
+  text_surface := sdl_ttf.render_utf8_solid(font, cs, sdl.Color{255, 255, 255, 255});
+  pos := sdl.Rect{
+    x = x - text_surface.w / 2, 
+    y = y - text_surface.h / 2
+  };
+  sdl.upper_blit(text_surface, nil, surface, &pos);
+  sdl.free_surface(text_surface);
+  mem.free(rawptr(cs));
 }
