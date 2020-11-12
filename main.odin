@@ -418,6 +418,17 @@ arial: ^sdl_ttf.Font;
 minecraft: ^sdl_ttf.Font;
 
 
+
+load_font :: proc(font_path: cstring, size: i32) -> ^sdl_ttf.Font {
+  font := sdl_ttf.open_font(font_path, size);
+  if font == nil {
+    fmt.printf("Could not open font: %s\n", font_path);
+    os.exit(1);
+  }
+  return font;
+}
+
+
 main :: proc() {
   if !SDL_Init() {
     fmt.println("Could not initialize SDL");
@@ -433,14 +444,10 @@ main :: proc() {
     os.exit(1);
   }
 
-  arial = sdl_ttf.open_font("arial.ttf", 32);
-  minecraft = sdl_ttf.open_font("minecraft.ttf", 16);
+  arial     = load_font("assets/arial.ttf", 32);
+  minecraft = load_font("assets/minecraft.ttf", 16);
 
   global_game_state.mode = .MENU;
-  //new_game(&global_game_state);
-
-
-
 	
 
   seconds_per_tick := 1.0 / f32(sdl.get_performance_frequency());
@@ -463,13 +470,7 @@ main :: proc() {
     
     draw(&global_game_state, gScreenSurface);
 
-    //sdl.render_present(gRenderer);
     sdl.update_window_surface(gWindow);
-
-
-  
-
-
 
   }
 
