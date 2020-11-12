@@ -266,6 +266,20 @@ draw_bullets :: proc(surface: ^sdl.Surface, game: ^GameState) {
   }
 }
 
+draw_particles :: proc(surface: ^sdl.Surface, game: ^GameState) {
+    
+  for p in particles {
+    trail_length := 5;
+    trail_pos := p.pos;
+    trail_dir := -linalg.normalize(p.vel);
+    plot_point(surface, i32(p.pos.x), i32(p.pos.y), 0xff, 0xff, 0xff);
+    for i in 1..trail_length {
+      plot_point(surface, i32(trail_pos.x), i32(trail_pos.y), u32(0xff / i), u32(0xff / i), u32(0xff / i));
+      trail_pos = trail_pos + trail_dir;
+    }
+  }
+}
+
 
 
 fade :: proc(surface: ^sdl.Surface) {
@@ -295,6 +309,7 @@ draw_game :: proc(game: ^GameState, surface: ^sdl.Surface) {
   sdl.fill_rect(surface, nil, sdl.map_rgb(surface.format, 0, 0, 0));
   draw_asteroids(surface, game);
   draw_bullets(surface, game);
+  draw_particles(surface, game);
   draw_player(surface, &(game.player));
 
   draw_string(surface, minecraft, fmt.tprintf("%d", game.score), SCREEN_WIDTH - 50, 10);

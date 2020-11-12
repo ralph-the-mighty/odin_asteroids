@@ -70,6 +70,12 @@ Bullet :: struct {
     lifetime: f32
 };
 
+Particle :: struct {
+  pos, vel: linalg.Vector2,
+  lifetime: f32,
+  size: f32
+}
+
 
 
 GameMode :: enum {
@@ -80,6 +86,23 @@ GameMode :: enum {
 
 
 
+
+particles :[dynamic]Particle;
+
+
+explosion :: proc(pos: linalg.Vector2) {
+  for i in 0..100 {
+    p := Particle{
+      pos = pos,
+      lifetime = rand.float32_range(0.25, 0.75)
+    };
+    vel := rand.float32_range(50, 200);
+    angle := rand.float32_range(0, 2 * math.PI);
+    p.vel.x = math.cos(angle) * vel;
+    p.vel.y = math.sin(angle) * vel;
+    append(&particles, p);
+  }
+} 
 
 
 
@@ -235,14 +258,40 @@ wrap_position :: proc(pos: ^linalg.Vector2) {
 }
 
 
+update_particles :: proc(dt: f32) {
+      //update bullets
+  for p, i in &particles {
+    p.lifetime -= dt;
+      
+    if p.lifetime <= 0 {
+      unordered_remove(&particles, i);
+      continue;
+    }
+    p.pos = p.pos + p.vel * dt;
+    wrap_position(&p.pos);
+  }
+}
+
+
 update :: proc(game: ^GameState, dt: f32) {
   frame += 1;
+
+  if came_down(.Escape) {
+    running = false;
+  }
 
   switch game.mode {
     case .MENU:
       if is_down(.Return) {
-        game.mode = .GAME;
-        new_game(game);
+        switch game.menu_cursor {
+          case 0:
+            game.mode = .GAME;
+            new_game(game);
+          case 1:
+            //nothing
+          case 2:
+            running = false;
+        }
       }
       if came_down(.Up) {
         game.menu_cursor = (game.menu_cursor - 1) % 3;
@@ -251,9 +300,7 @@ update :: proc(game: ^GameState, dt: f32) {
         game.menu_cursor = (game.menu_cursor + 1) % 3;
       }
     case .GAME:
-      if came_down(.Escape) {
-        running = false;
-      }
+
         
       if came_down(.P) {
         paused = !paused;
@@ -338,6 +385,9 @@ update :: proc(game: ^GameState, dt: f32) {
         wrap_position(&b.pos);
       }
 
+      //update particles
+      update_particles(dt);
+
 
         //collision detection
         //TODO: fix bug where two bullets destroy the same asteroid at the same time
@@ -352,6 +402,7 @@ update :: proc(game: ^GameState, dt: f32) {
               gen_asteroid(game, a.pos, a.size * 0.75, a.gen - 1);
               gen_asteroid(game, a.pos, a.size * 0.75, a.gen - 1);
             }
+            explosion(b.pos);
             unordered_remove(&game.bullets, b_index);
             unordered_remove(&game.asteroids, a_index);
             game.score += 10;
