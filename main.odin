@@ -21,8 +21,8 @@ BULLET_VEL     :: 500;           // pixels  / sec
 
 
 
-SCREEN_WIDTH  :: 620;
-SCREEN_HEIGHT :: 480;
+SCREEN_WIDTH  :: 1920 / 2;
+SCREEN_HEIGHT :: 1080 / 2;
 
 
 KeyState :: struct {
@@ -327,6 +327,8 @@ update :: proc(game: ^GameState, dt: f32) {
         b.pos = game.player.pos + game.player.rotation * 15;
         b.vel = game.player.rotation * BULLET_VEL;
         append(&game.bullets, b);
+        
+        play_sound(0, 128);
       }
         
       if paused do return;
@@ -409,6 +411,7 @@ update :: proc(game: ^GameState, dt: f32) {
             unordered_remove(&game.bullets, b_index);
             unordered_remove(&game.asteroids, a_index);
             game.score += 10;
+            play_sound(1, 32);
           }
         }
       }
@@ -434,91 +437,6 @@ load_font :: proc(font_path: cstring, size: i32) -> ^sdl_ttf.Font {
 
 
 
-
-//= = = = = = = = = = = = = = = = = = = 
-//sound stuff
-//= = = = = = = = = = = = = = = = = = = 
-
-
-
-SDL_AUDIO_S16 :: 0x8010;
-SDL_MIX_MAXVOLUME :: 128;
-
-
-
-NUM_SOUNDS :: 2;
-
-Sample :: struct {
-    data: ^u8,
-    dpos, dlen: u32,
-};
-
-sounds : [NUM_SOUNDS]Sample;
-
-mixaudio :: proc(unused: rawptr, stream: ^u8, len: i32) {
-  amount: u32;
-
-  for i in 0..<NUM_SOUNDS {
-    amount = (sounds[i].dlen - sounds[i].dpos);
-    if amount > u32(len) {
-        amount = u32(len);
-    }
-    sdl.mix_audio(stream, slice.ptr_add(sounds[i].data, int(sounds[i].dpos)), amount, SDL_MIX_MAXVOLUME);
-    sounds[i].dpos += amount;
-  }
-}
-
-play_sound :: proc(file: cstring) {
-  index: i32;
-  wave: sdl.Audio_Spec;
-  data: ^u8;
-  dlen: u32;
-  cvt: sdl.Audio_Cvt ;
-
-  /* Look for an empty (or finished) sound slot */
-  for index in 0..<NUM_SOUNDS {
-    if sounds[index].dpos == sounds[index].dlen {
-      break;
-    }
-  }
-  if index == NUM_SOUNDS {
-    return;
-  }
-
-  /* Load the sound file and convert it to 16-bit stereo at 22kHz */
-  if sdl.load_wav_rw(sdl.rw_from_file(file, "rb"), 1, &wave, &data, &dlen) == nil {
-    fmt.printf("Couldn't load %s: %s\n", file, sdl.get_error());
-    return;
-  }
-
-  sdl.build_audio_cvt(&cvt, wave.format, wave.channels, 
-                      wave.freq, SDL_AUDIO_S16, 2, 22050);
-
-  cvt.buf = cast(^u8) mem.alloc(int(dlen) * int(cvt.len_mult));
-  mem.copy(rawptr(cvt.buf), rawptr(data), int(dlen));
-  cvt.len = i32(dlen);
-  sdl.convert_audio(&cvt);
-  sdl.free_wav(data);
-
-  /* Put the sound data in the slot (it starts playing immediately) */
-  if sounds[index].data != nil {
-    mem.free(sounds[index].data);
-  }
-  sdl.lock_audio();
-  sounds[index].data = cvt.buf;
-  sounds[index].dlen = u32(cvt.len_cvt);
-  sounds[index].dpos = 0;
-  sdl.unlock_audio();
-}
-
-
-
-
-//= = = = = = = = = = = = = = = = = = = 
-//end sound stuff
-//= = = = = = = = = = = = = = = = = = = 
-
-
 main :: proc() {
   if !SDL_Init() {
     fmt.println("Could not initialize SDL");
@@ -537,34 +455,10 @@ main :: proc() {
   arial     = load_font("assets/fonts/arial.ttf", 32);
   minecraft = load_font("assets/fonts/minecraft.ttf", 16);
 
+  load_wav("assets/audio/laser3.wav");
+  load_wav("assets/audio/explosionCrunch_000.wav");
 
-
-
-
-
-
-
-  format: sdl.Audio_Spec;
-
-  /* Set 16-bit stereo audio at 22Khz */
-  format.freq = 22050;
-  format.format = SDL_AUDIO_S16;
-  format.channels = 2;
-  format.samples = 512;        /* A good value for games */
-  format.callback = cast(sdl.Audio_Callback)mixaudio;
-  format.userdata = nil;
-
-  /* Open the audio device and start playing sound! */
-  if sdl.open_audio(&format, nil) < 0 {
-    fmt.printf("Unable to open audio: %s\n", sdl.get_error());
-    os.exit(1);
-  }
-  sdl.pause_audio(0);
-
-
-
-
-  play_sound("assets/audio/laser3.wav");
+  init_sound();
 
 
 
