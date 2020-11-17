@@ -290,6 +290,7 @@ update :: proc(game: ^GameState, dt: f32) {
           case 0:
             game.mode = .GAME;
             new_game(game);
+            start_bg_sound(2, 15);
           case 1:
             //nothing
           case 2:
@@ -328,7 +329,7 @@ update :: proc(game: ^GameState, dt: f32) {
         b.vel = game.player.rotation * BULLET_VEL;
         append(&game.bullets, b);
         
-        play_sound(0, 128);
+        play_sound_effect(0, 30);
       }
         
       if paused do return;
@@ -411,7 +412,8 @@ update :: proc(game: ^GameState, dt: f32) {
             unordered_remove(&game.bullets, b_index);
             unordered_remove(&game.asteroids, a_index);
             game.score += 10;
-            play_sound(1, 32);
+            play_sound_effect(1, 5);
+            break;
           }
         }
       }
@@ -457,6 +459,7 @@ main :: proc() {
 
   load_wav("assets/audio/laser3.wav");
   load_wav("assets/audio/explosionCrunch_000.wav");
+  load_wav("assets/audio/through space.wav");
 
   init_sound();
 

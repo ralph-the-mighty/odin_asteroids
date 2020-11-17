@@ -46,9 +46,6 @@ Wav :: struct {
 wavs: [MAX_WAVS]Wav;
 
 
-
-MAX_CHANNELS :: 16;
-
 Channel :: struct {
   wav: ^Wav,
   cursor: u32,
@@ -56,7 +53,14 @@ Channel :: struct {
   playing: bool
 }
 
-channels: [MAX_CHANNELS]Channel;
+
+MAX_EFFECT_CHANNELS :: 16;
+effect_channels: [MAX_EFFECT_CHANNELS]Channel;
+
+MAX_BG_CHANNELS :: 4;
+background_channels: [MAX_BG_CHANNELS]Channel;
+
+
 
 
 
@@ -68,7 +72,7 @@ mixaudio :: proc(unused: rawptr, stream: ^u8, len: i32) {
   mem.zero(rawptr(stream), int(len));
   
 
-  for channel in &channels {
+  for channel in &effect_channels {
     if !channel.playing {
       continue;
     }
@@ -88,6 +92,48 @@ mixaudio :: proc(unused: rawptr, stream: ^u8, len: i32) {
       channel.cursor += out_len;
     } else {
       channel.cursor = 0;
+    }
+  }
+
+  // 000000000011111111111222222222
+  // 012345678901234567890123456789
+  // ||||||||||||||||||||||||||||||
+  //                            ^**
+  // ****^   
+
+
+  for channel in &background_channels {
+    if !channel.playing {
+      continue;
+    }
+    remainder := channel.wav.length - channel.cursor;
+
+    if remainder > u32(len) {
+      sdl.mix_audio(stream,
+              slice.ptr_add(channel.wav.buffer, int(channel.cursor)), 
+              u32(len),
+              channel.volume);
+      channel.cursor += u32(len);
+    } else if remainder == u32(len) {
+      sdl.mix_audio(stream,
+        slice.ptr_add(channel.wav.buffer, int(channel.cursor)), 
+        u32(len),
+        channel.volume);
+      channel.cursor = 0;
+    } else {
+      assert(remainder < u32(len));
+      sdl.mix_audio(stream,
+        slice.ptr_add(channel.wav.buffer, int(channel.cursor)), 
+        remainder,
+        channel.volume);
+
+      sdl.mix_audio(
+        slice.ptr_add(stream, int(remainder)),
+        channel.wav.buffer,
+        u32(len) - remainder,
+        channel.volume);
+
+      channel.cursor = u32(len) - remainder;
     }
   }
 }
@@ -111,8 +157,8 @@ load_wav :: proc(file: cstring) {
 
 
 
-play_sound :: proc(wav_index, volume: i32) {
-  for channel, i in &channels {
+play_sound_effect :: proc(wav_index, volume: i32) {
+  for channel, i in &effect_channels {
     if !channel.playing { //find a channel that is currently not being used to initialize
       fmt.printf("qeueing sound on channel %d\n", i);
       sdl.lock_audio();
@@ -124,6 +170,27 @@ play_sound :: proc(wav_index, volume: i32) {
       break;
     }
   }
+}
+
+
+start_bg_sound :: proc(wav_index, volume: i32) {
+  for channel, i in &background_channels {
+    if !channel.playing { //find a channel that is currently not being used to initialize
+      fmt.printf("starting background sound on channel %d\n", i);
+      sdl.lock_audio();
+      channel.wav = &wavs[wav_index];
+      channel.cursor = 0;
+      channel.volume = volume;
+      channel.playing = true;
+      sdl.unlock_audio();
+      break;
+    }
+  }
+}
+
+
+stop_bg_sound :: proc(channel_index: i32) {
+  background_channels[channel_index].playing = false;
 }
 
 
